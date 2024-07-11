@@ -1,0 +1,26 @@
+package com.mac.kafka.query;
+
+import java.util.List;
+import java.util.Map;
+
+/**
+ * The interface Kafka consumer config service.
+ *
+ * @author macjay
+ */
+public interface KafkaQueryConfigService {
+
+
+
+    /**
+    * 获取客户端id
+    * @author mac
+    * @Date 2024/7/10 13:20
+    **/
+     Map<String,Map<String,String>>  getClientIdByTopics(List<String> topics);
+
+
+
+
+
+}
