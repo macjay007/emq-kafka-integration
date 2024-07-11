@@ -1,0 +1,14 @@
+package com.mac.kafka;
+
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+
+/**
+*
+* @author zj
+* @Date 2024/7/5 14:08
+**/
+public interface KafkaMessageHandler<K, V> {
+    void handle(ConsumerRecord<K, V> record);
+
+    String getTopic();
+}
