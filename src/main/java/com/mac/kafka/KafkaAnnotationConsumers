@@ -1,0 +1,17 @@
+package com.mac.kafka.annotation;
+
+import java.lang.annotation.*;
+
+/**
+*
+* @author mac
+* @Date 2024/7/9 10:16
+**/
+@Retention(RetentionPolicy.RUNTIME)
+@Target({ElementType.TYPE})
+@Documented
+//@Import({KafkaConsumerRegistrar.RepeatingRegistrar.class})
+public @interface KafkaAnnotationConsumers {
+    KafkaAnnotationConsumer[] value();
+
+}
