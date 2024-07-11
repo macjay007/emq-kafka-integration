@@ -1,0 +1,82 @@
+package com.mac.emq;
+
+
+import lombok.extern.slf4j.Slf4j;
+import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
+import org.springframework.integration.mqtt.core.DefaultMqttPahoClientFactory;
+import org.springframework.integration.mqtt.core.MqttPahoClientFactory;
+import org.springframework.stereotype.Component;
+
+import java.nio.charset.StandardCharsets;
+
+/**
+ * 描述: 客户端工厂配置
+ *
+ */
+@Slf4j
+@Component
+public class MqttPahoClientFactorySetting {
+
+    private MqttPahoClientFactorySettingCallback mqttPahoClientFactorySettingCallback;
+
+    public MqttPahoClientFactorySetting(MqttPahoClientFactorySettingCallback mqttPahoClientFactorySettingCallback) {
+        super();
+        this.mqttPahoClientFactorySettingCallback = mqttPahoClientFactorySettingCallback;
+    }
+
+    /**
+     * 配置MqttPahoClientFactory
+     *
+     * @param config      配置信息
+     * @param isConsumer  是否是消费者
+     * @return MqttPahoClientFactory
+     */
+    public MqttPahoClientFactory mqttClientFactory(MqttProperties.MqttServerProperty config, boolean isConsumer) {
+        DefaultMqttPahoClientFactory factory = new DefaultMqttPahoClientFactory();
+        MqttConnectOptions options = new MqttConnectOptions();
+
+        options.setServerURIs(config.getUrl());
+        options.setCleanSession(config.getCleanSession() == null || config.getCleanSession());
+        options.setKeepAliveInterval(config.getKeepAliveInterval());
+        options.setPassword(config.getPassword().toCharArray());
+        options.setUserName(config.getUsername());
+        options.setConnectionTimeout(config.getTimeout());
+        options.setAutomaticReconnect(config.getAutomaticReconnect() == null || config.getAutomaticReconnect());
+
+        Integer mqttVersion = config.getMqttVersion();
+        if (mqttVersion != null) {
+            options.setMqttVersion(mqttVersion);
+        }
+
+        Integer maxInflight = config.getMaxInflight();
+        if (maxInflight != null) {
+            options.setMaxInflight(maxInflight);
+        }
+
+        MqttProperties.Will will = null;
+        if (isConsumer && config.getConsumerWill() != null) {
+            will = config.getConsumerWill();
+        } else if (!isConsumer && config.getProducerWill() != null) {
+            will = config.getProducerWill();
+        }
+        if (will != null) {
+            options.setWill(will.getTopic(), will.getPayload().getBytes(StandardCharsets.UTF_8), will.getQos(),
+                will.getRetained());
+        }
+
+        if (mqttPahoClientFactorySettingCallback != null) {
+            mqttPahoClientFactorySettingCallback.callback(options, config, isConsumer);
+        }
+
+        factory.setConnectionOptions(options);
+        return factory;
+    }
+    public MqttPahoClientFactorySettingCallback getMqttPahoClientFactorySettingCallback() {
+        return mqttPahoClientFactorySettingCallback;
+    }
+
+    public void setMqttPahoClientFactorySettingCallback(
+        MqttPahoClientFactorySettingCallback mqttPahoClientFactorySettingCallback) {
+        this.mqttPahoClientFactorySettingCallback = mqttPahoClientFactorySettingCallback;
+    }
+}
