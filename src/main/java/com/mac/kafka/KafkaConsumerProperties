@@ -1,0 +1,64 @@
+package com.mac.kafka;
+
+/**
+ * 消费端设置
+ *
+ * @author zj
+ * @Date 2024/7/2 12:05
+ **/
+
+import cn.hutool.core.collection.CollUtil;
+import cn.hutool.core.lang.generator.UUIDGenerator;
+import lombok.Data;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.context.annotation.Configuration;
+
+import javax.annotation.PostConstruct;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+
+/**
+ * kafka消费者配置
+ *
+ * @create 2024/1/23 10:42
+ */
+@Configuration("kafkaConsumerProperties")
+@ConfigurationProperties(prefix = "kafka.consumer")
+@ConditionalOnProperty(name = "kafka.consumer.enabled", havingValue = "true", matchIfMissing = false)
+@Data
+@Slf4j
+public class KafkaConsumerProperties {
+
+    @Value("${kafka.bootstrap-servers}")
+    private String bootstrapServers;
+    @Value("${kafka.consumer.group-id}")
+    private String groupId;
+    @Value("${kafka.consumer.enable-auto-commit}")
+    private boolean enableAutoCommit;
+    @Value("${kafka.consumer.properties.session.timeout.ms}")
+    private String sessionTimeout;
+    @Value("${kafka.consumer.properties.max.poll.interval.ms}")
+    private Integer maxPollIntervalTime;
+    @Value("${kafka.consumer.max-poll-records}")
+    private String maxPollRecords;
+    @Value("${kafka.consumer.auto-offset-reset}")
+    private String autoOffsetReset;
+    @Value("${kafka.consumer.properties.listener.concurrency}")
+    private Integer concurrency;
+    @Value("${kafka.consumer.auto-commit-interval}")
+    private Integer autoCommitInterval;
+    @Value("${kafka.listener.missing-topics-fatal}")
+    private boolean missingTopicsFatal;
+    @Value("${kafka.listener.poll-timeout}")
+    private long pollTimeout;
+    private List<String> topicsListen;
+    private List<String> beanMethod;
+    private List<Long> consumerClientIds;
+    private Boolean dbEnabled;
+    private Boolean customEnabled;
+
+}
