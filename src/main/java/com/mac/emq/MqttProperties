@@ -1,0 +1,134 @@
+package com.mac.emq;
+
+import lombok.Data;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.context.annotation.Configuration;
+
+import java.util.Map;
+
+/**
+ * @author: mac
+ * @date: 2024/6/25
+ */
+@Data
+@ConfigurationProperties(prefix = "mqtt")
+@ConditionalOnProperty(prefix = "mqtt", name = "enabled", havingValue = "true",
+    matchIfMissing = false)
+@Configuration(value = "mqttProperties")
+public class MqttProperties {
+    private Boolean enabled;
+    private Map<String, Channels> channels;
+
+    private MqttServerProperty server;
+
+
+    @Data
+    public static class MqttServerProperty {
+        /**
+         * 数组tcp://ip:port
+         */
+        private String[] url;
+        /**
+         * 账号
+         */
+        private String username;
+        /**
+         * 密码
+         */
+        private String password;
+        /**
+         * 是否自动重连
+         */
+        private Boolean automaticReconnect;
+        /**
+         * 是否清除session
+         */
+        private Boolean cleanSession;
+        /**
+         * max inflight
+         */
+        private Integer maxInflight;
+        /**
+         * 超时时间，单位：秒
+         */
+        private int timeout;
+        /**
+         * 心跳时间，秒
+         */
+        private int keepAliveInterval;
+        /**
+         * mqtt版本
+         */
+        private Integer mqttVersion;
+        /**
+         * consumer遗嘱配置
+         */
+        private Will consumerWill;
+        /**
+         * producer遗嘱配置
+         */
+        private Will producerWill;
+    }
+
+    @Data
+    public static class Channels {
+        /**
+         * 是否开启consumer,默认true开启
+         */
+        private Boolean consumerEnable;
+        /**
+         * 是否开启producer,默认true开启
+         */
+        private Boolean producerEnable;
+        /**
+         * qos设置，和topic一一对应
+         */
+        private int[] qos;
+        /**
+         * 主题，和qos一一对应
+         */
+        private String[] topics;
+        /**
+         * clientId后是否添加本机ip
+         */
+        private Boolean clientIdAppendIp;
+        /**
+         * consumer clientId
+         */
+        private String consumerClientId;
+        /**
+         * provider clientId
+         */
+        private String producerClientId;
+        /**
+         * 是否是字节码传输
+         */
+        private boolean payloadAsBytes = true;
+        /**
+         * 是否异步发送消息
+         */
+        private Boolean async;
+
+    }
+
+    @Data
+    public static class Will {
+        /**
+         * 遗嘱qos设置
+         */
+        private int qos;
+        /**
+         * 遗嘱主题
+         */
+        private String topic;
+        /**
+         * 遗嘱内容
+         */
+        private String payload;
+        /**
+         * 是否发送保留消息
+         */
+        private Boolean retained;
+    }
+}
