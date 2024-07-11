@@ -1,0 +1,22 @@
+package com.mac.emq;
+
+import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
+
+/**
+ * 描述: 客户端工厂配置回调，用于自定义配置信息
+ *
+ */
+public interface MqttPahoClientFactorySettingCallback {
+
+    /**
+     * 配置MqttConnectOptions后的回调，用于自定义进行配置，例如可以自定义实现ssl配置
+     *
+     * @param options 设置参数
+     * @param config 配置
+     * @param isConsumer 是否是消费者
+     */
+    void callback(MqttConnectOptions options, MqttProperties.MqttServerProperty config, boolean isConsumer);
+
+
+
+}
