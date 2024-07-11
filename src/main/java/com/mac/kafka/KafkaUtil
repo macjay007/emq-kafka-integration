@@ -1,0 +1,168 @@
+package com.mac.kafka;
+
+import lombok.extern.slf4j.Slf4j;
+import org.apache.kafka.clients.admin.*;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.config.TopicConfig;
+import org.apache.kafka.common.serialization.StringDeserializer;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.stereotype.Component;
+
+import java.time.Duration;
+import java.util.*;
+
+/**
+ * @ClassName: KafkaUtil
+ * @Description: TODO 用于创建kafka Topic队列和listener监听容器的工具类
+ **/
+@Component
+@Slf4j
+public class KafkaUtil {
+
+    // 存储topic到消息处理器的映射
+    private static Map<String, KafkaMessageHandler<?, ?>> topicHandlers = new HashMap<>();
+
+    private static AdminClient adminClient;
+    private static KafkaTemplate kafkaTemplate;
+    private static KafkaConsumerProperties kafkaConsumerProperties;
+    /**
+     * @param adminClient   kafka客户端对象
+     * @param kafkaTemplate kafka生产者工具类
+     * @return
+     * @Title KafkaUtil
+     * @Description 构造函数注入
+     */
+    @Autowired
+    public KafkaUtil(AdminClient adminClient, KafkaTemplate kafkaTemplate,KafkaConsumerProperties kafkaConsumerProperties) {
+        KafkaUtil.adminClient = adminClient;
+        KafkaUtil.kafkaTemplate = kafkaTemplate;
+        KafkaUtil.kafkaConsumerProperties = kafkaConsumerProperties;
+
+    }
+
+    /**
+     * @param topicName  topic名
+     * @param partitions 分区数
+     * @param replicas   副本数（short）
+     * @return void
+     * @Title createTopic
+     * @Description 创建kafka topic
+     */
+    public static void createTopic(String topicName, int partitions, short replicas) throws Exception {
+        NewTopic newTopic = new NewTopic(topicName, partitions, replicas);
+        CreateTopicsResult topics = adminClient.createTopics(Collections.singleton(newTopic));
+        topics.all().get();
+        log.info("【{}】topic创建成功", topicName);
+    }
+
+    /**
+     * @param topicName topic名称
+     * @return void
+     * @Title deleteTopic
+     * @Description 删除topic
+     */
+    public static void deleteTopic(String topicName) throws Exception {
+        DeleteTopicsResult deleteTopicsResult = adminClient.deleteTopics(Collections.singleton(topicName));
+        deleteTopicsResult.all().get();
+        log.info("【{}】topic删除成功", topicName);
+
+    }
+
+    /**
+     * @param topicName topic名称
+     * @param ms        过期时间（毫秒值）
+     * @return void
+     * @Title updateTopicRetention
+     * @Description 修改topic的过期时间
+     */
+    public static void updateTopicRetention(String topicName, String ms) throws Exception {
+        ConfigResource resource = new ConfigResource(ConfigResource.Type.TOPIC, topicName);
+        ConfigEntry configEntry = new ConfigEntry(TopicConfig.RETENTION_MS_CONFIG, ms);
+        Config config = new Config(Collections.singleton(configEntry));
+        // 创建AlterConfigsOptions
+        AlterConfigsOptions alterConfigsOptions = new AlterConfigsOptions().timeoutMs(10000);
+        // 执行修改操作
+        adminClient.alterConfigs(Collections.singletonMap(resource, config), alterConfigsOptions).all().get();
+        log.info("【{}】topic过期时间设置完成，过期时间为：{}毫秒", topicName, ms);
+    }
+
+
+    /**
+     * @return java.util.Set<java.lang.String>
+     * @Title listTopic
+     * @Description 获取topic列表
+     */
+    public static Set<String> listTopic() throws Exception {
+        ListTopicsResult listTopicsResult = adminClient.listTopics();
+        Set<String> strings = listTopicsResult.names().get();
+        return strings;
+    }
+
+
+    /**
+     * @param topicName topic名称
+     * @return boolean
+     * @Title existTopic
+     * @Description topic是否存在
+     */
+    public static boolean existTopic(String topicName) throws Exception {
+        Set<String> strings = listTopic();
+        if (strings == null || strings.isEmpty()) {
+            return false;
+        }
+        return strings.contains(topicName);
+    }
+
+    /**
+     * @param topic 队列名称
+     * @param msg   消息
+     * @return void
+     * @Title sendMsg
+     * @Description 通过注册信息找到对应的容器并启动
+     */
+    public static void sendMsg(String topic, Object msg) throws Exception {
+        kafkaTemplate.send(topic, msg);
+        //kafkaTemplate.send(topic,2,"key",msg);//带有分区和key值的
+    }
+
+    public static <K, V> void startConsumer() {
+        // 设置Kafka消费者配置
+        Properties props = new Properties();
+        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaConsumerProperties.getBootstrapServers());
+        props.put("group.id", kafkaConsumerProperties.getGroupId());
+        props.put("key.deserializer", StringDeserializer.class.getName());
+        props.put("value.deserializer", StringDeserializer.class.getName());
+        // 创建Kafka消费者
+        KafkaConsumer<K, V> consumer = new KafkaConsumer<>(props);
+
+        // 订阅主题
+        consumer.subscribe(kafkaConsumerProperties.getTopicsListen());
+        try {
+            while (true) {
+                ConsumerRecords<String, String> records = (ConsumerRecords<String, String>) consumer.poll(Duration.ofMillis(100));
+                for (ConsumerRecord<String, String> record : records) {
+                    // 根据topic获取并调用消息处理器
+                    KafkaMessageHandler<?, ?> handler = topicHandlers.get(record.topic());
+                    if (handler != null) {
+                        KafkaMessageHandler<String, String> typedHandler = (KafkaMessageHandler<String, String>) handler;
+                        typedHandler.handle(record);
+                    } else {
+                        // 没有找到处理器，可以记录日志或进行其他处理
+                        System.out.println("No handler registered for topic: " + record.topic());
+                    }
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            // 优雅地关闭消费者
+            consumer.close();
+        }
+    }
+
+
+}
