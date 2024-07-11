@@ -1,0 +1,141 @@
+package com.mac.emq;
+
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.BeansException;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.config.BeanDefinition;
+import org.springframework.beans.factory.support.AbstractBeanDefinition;
+import org.springframework.beans.factory.support.BeanDefinitionBuilder;
+import org.springframework.beans.factory.support.DefaultListableBeanFactory;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.ApplicationContextAware;
+import org.springframework.context.ConfigurableApplicationContext;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.integration.channel.DirectChannel;
+import org.springframework.integration.mqtt.core.MqttPahoClientFactory;
+import org.springframework.integration.mqtt.inbound.MqttPahoMessageDrivenChannelAdapter;
+import org.springframework.integration.mqtt.outbound.MqttPahoMessageHandler;
+import org.springframework.integration.mqtt.support.DefaultPahoMessageConverter;
+import org.springframework.messaging.MessageChannel;
+
+import javax.annotation.Resource;
+import java.util.Map;
+
+/**
+ * @author: macjay
+ * @date: 2024/6/25
+ */
+@Slf4j
+@Configuration
+@EnableConfigurationProperties(MqttProperties.class)
+@ConditionalOnBean(value = MqttProperties.class,name = "mqttProperties")
+public class MqttAutoConfig implements ApplicationContextAware {
+    private ConfigurableApplicationContext applicationContext;
+    @Autowired
+    private MqttProperties mqttProperties;
+
+    @Autowired(required = false)
+    private MqttPahoClientFactorySettingCallback mqttPahoClientFactorySettingCallback;
+
+    @Resource
+    private MqttPahoClientFactorySetting mqttPahoClientFactorySetting;
+
+//    @ConditionalOnMissingBean(MqttPahoClientFactorySetting.class)
+//    @Bean
+//    public MqttPahoClientFactorySetting mqttPahoClientFactorySetting() {
+//        return new MqttPahoClientFactorySetting(mqttPahoClientFactorySettingCallback);
+//    }
+
+
+    @Override
+    public void setApplicationContext(ApplicationContext applicationContext) throws BeansException {
+        this.applicationContext = (ConfigurableApplicationContext) applicationContext;
+        MqttPahoClientFactory mqttPahoClientFactory = initMqttClientFactory(mqttProperties.getServer());
+        for (Map.Entry<String, MqttProperties.Channels> entry : mqttProperties.getChannels().entrySet()) {
+            String key = entry.getKey();
+            MqttProperties.Channels value = entry.getValue();
+            init(key, value,mqttPahoClientFactory);
+        }
+    }
+
+    private void init(String channelName, MqttProperties.Channels channels, MqttPahoClientFactory mqttPahoClientFactory) {
+        DefaultListableBeanFactory beanFactory = (DefaultListableBeanFactory) applicationContext.getBeanFactory();
+        // 默认开启consumer
+        if (!Boolean.FALSE.equals(channels.getConsumerEnable())) {
+            // 通道信息
+            beanFactory.registerBeanDefinition(channelName, mqttChannel());
+            log.info("初始化mqtt, channel {}, 配置 {} ", channelName, channels);
+
+            MessageChannel mqttChannel = beanFactory.getBean(channelName, MessageChannel.class);
+            beanFactory.registerBeanDefinition(channelName + "MqttChannelAdapter", channelAdapter(channels, mqttChannel,mqttPahoClientFactory));
+            log.info("初始化mqtt Channel Adapter");
+        }
+
+        // 默认开启consumer
+        if (!Boolean.FALSE.equals(channels.getProducerEnable())) {
+            String handlerBeanName = channelName + MqttUtils.CHANNEL_NAME_SUFFIX;
+            beanFactory.registerBeanDefinition(handlerBeanName, mqttOutbound(channels,mqttPahoClientFactory));
+            log.info("初始化mqtt MqttPahoMessageHandler");
+
+            MqttUtils.put(channelName, beanFactory.getBean(handlerBeanName, MqttPahoMessageHandler.class));
+        }
+    }
+
+    private AbstractBeanDefinition mqttChannel() {
+        BeanDefinitionBuilder messageChannelBuilder = BeanDefinitionBuilder.genericBeanDefinition(DirectChannel.class);
+        messageChannelBuilder.setScope(BeanDefinition.SCOPE_SINGLETON);
+        return messageChannelBuilder.getBeanDefinition();
+    }
+
+    /**
+     * mqtt消息驱动转换器
+     *
+     * @param channels
+     * @param mqttChannel
+     * @param mqttPahoClientFactory
+     * @return
+     */
+    private AbstractBeanDefinition channelAdapter(MqttProperties.Channels channels, MessageChannel mqttChannel, MqttPahoClientFactory mqttPahoClientFactory) {
+        BeanDefinitionBuilder messageProducerBuilder = BeanDefinitionBuilder.genericBeanDefinition(MqttPahoMessageDrivenChannelAdapter.class);
+        messageProducerBuilder.setScope(BeanDefinition.SCOPE_SINGLETON);
+        messageProducerBuilder.addConstructorArgValue(channels.getConsumerClientId());
+        messageProducerBuilder.addConstructorArgValue(mqttPahoClientFactory);
+        messageProducerBuilder.addConstructorArgValue(channels.getTopics());
+        messageProducerBuilder.addPropertyValue("converter", initDefaultPahoMessageConverter(channels.isPayloadAsBytes()));
+        messageProducerBuilder.addPropertyValue("qos", channels.getQos());
+        messageProducerBuilder.addPropertyValue("outputChannel", mqttChannel);
+
+        return messageProducerBuilder.getBeanDefinition();
+    }
+
+    private MqttPahoClientFactory initMqttClientFactory(MqttProperties.MqttServerProperty server){
+        return mqttPahoClientFactorySetting.mqttClientFactory(server,false);
+    }
+
+
+
+
+
+    private DefaultPahoMessageConverter initDefaultPahoMessageConverter(boolean payloadAsBytes){
+        DefaultPahoMessageConverter defaultPahoMessageConverter = new DefaultPahoMessageConverter();
+        defaultPahoMessageConverter.setPayloadAsBytes(payloadAsBytes);
+        return defaultPahoMessageConverter;
+    }
+
+    /**
+     * 消息发送客户端
+     *
+     * @param channels
+     * @param mqttPahoClientFactory
+     * @return
+     */
+    private AbstractBeanDefinition mqttOutbound(MqttProperties.Channels channels, MqttPahoClientFactory mqttPahoClientFactory) {
+        BeanDefinitionBuilder builder = BeanDefinitionBuilder.genericBeanDefinition(MqttPahoMessageHandler.class);
+        builder.addConstructorArgValue(channels.getProducerClientId());
+        builder.addConstructorArgValue(mqttPahoClientFactory);
+        builder.addPropertyValue("async", channels.getAsync());
+        return builder.getBeanDefinition();
+    }
+}
