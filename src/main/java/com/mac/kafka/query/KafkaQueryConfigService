@@ -14,13 +14,18 @@ public interface KafkaQueryConfigService {
 
     /**
     * 获取客户端id
-    * @author mac
+    * @author zj
     * @Date 2024/7/10 13:20
     **/
      Map<String,Map<String,String>>  getClientIdByTopics(List<String> topics);
 
 
-
+    /**
+     * Find all list.
+     *
+     * @return the list
+     */
+    List<Map<String, Object>> findConfigs();
 
 
 }
