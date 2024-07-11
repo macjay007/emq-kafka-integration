@@ -1,0 +1,60 @@
+package com.mac.kafka.annotation;
+
+import org.springframework.kafka.annotation.TopicPartition;
+import org.springframework.messaging.handler.annotation.MessageMapping;
+
+import java.lang.annotation.*;
+
+/**
+*
+* @author zj
+* @Date 2024/7/9 10:16
+**/
+
+
+@Target({ElementType.TYPE, ElementType.METHOD, ElementType.ANNOTATION_TYPE})
+@Retention(RetentionPolicy.RUNTIME)
+@MessageMapping
+//@Import({KafkaConsumerRegistrar.class})
+@Documented
+@Repeatable(KafkaAnnotationConsumers.class)
+public @interface KafkaAnnotationConsumer {
+    String id() default "";
+
+    String containerFactory() default "";
+
+    String[] topics() default {};
+
+    String topicPattern() default "";
+
+    TopicPartition[] topicPartitions() default {};
+
+    String containerGroup() default "";
+
+    String errorHandler() default "";
+
+    String groupId() default "";
+
+    boolean idIsGroup() default true;
+
+    String clientIdPrefix() default "";
+
+    String beanRef() default "__listener";
+
+    String concurrency() default "";
+
+    String autoStartup() default "";
+
+    String[] properties() default {};
+
+    boolean splitIterables() default true;
+
+    String contentTypeConverter() default "";
+
+    String batch() default "";
+
+    String filter() default "";
+
+    String info() default "";
+
+}
