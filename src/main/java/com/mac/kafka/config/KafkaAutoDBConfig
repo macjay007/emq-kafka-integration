@@ -7,7 +7,6 @@ import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONObject;
 import com.mac.kafka.ClassMethodArgs;
 import com.mac.kafka.KafkaConsumerProperties;
-import com.mac.kafka.KafkaMessageHandler;
 import com.mac.kafka.query.KafkaQueryConfigService;
 import lombok.Getter;
 import lombok.SneakyThrows;
@@ -21,7 +20,6 @@ import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationContextAware;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.core.Ordered;
 import org.springframework.kafka.annotation.KafkaListenerAnnotationBeanPostProcessor;
 import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
 import org.springframework.kafka.config.KafkaListenerContainerFactory;
@@ -33,7 +31,6 @@ import org.springframework.kafka.listener.ConcurrentMessageListenerContainer;
 import org.springframework.messaging.handler.annotation.support.MessageHandlerMethodFactory;
 import org.springframework.util.ReflectionUtils;
 
-import javax.annotation.PostConstruct;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -130,12 +127,11 @@ public class KafkaAutoDBConfig implements ApplicationContextAware {
         if (!kafkaConsumerProperties.getDbEnabled()) {
             return;
         } else if (CollUtil.isEmpty(kafkaConsumerProperties.getConsumerClientIds())) {
-            if (initClientId()) {
-                log.info("kafka-db方式客户端id初始化成功！");
-            }else {
+            if (!initClientId()) {
                 log.info("kafka-db方式客户端id初始化失败，请检查数据库topic缺失！");
+                return;
             }
-            return;
+            log.info("kafka-db方式客户端id初始化成功！");
         }
         List<String> topicsListen = kafkaConsumerProperties.getTopicsListen();
         MessageHandlerMethodFactory methodFactory = postProcessor.getMessageHandlerMethodFactory();
@@ -143,8 +139,8 @@ public class KafkaAutoDBConfig implements ApplicationContextAware {
             for (int i = 0; i < topicsListen.size(); i++) {
                 String kafkaBroker = kafkaConsumerProperties.getBootstrapServers();
                 if (!consumerFactoryMap.containsKey(kafkaBroker)) {
-                    JSONObject props = ObjUtil.isEmpty(kafkaConsumerProperties) ? new JSONObject() : JSON.parseObject(JSON.toJSONString(kafkaConsumerProperties));
-                    DefaultKafkaConsumerFactory<String, String> consumerFactory = new DefaultKafkaConsumerFactory<>(props);
+//                    JSONObject props = ObjUtil.isEmpty(kafkaConsumerProperties) ? new JSONObject() : JSON.parseObject(JSON.toJSONString(kafkaConsumerProperties));
+                    DefaultKafkaConsumerFactory<String, String> consumerFactory = new DefaultKafkaConsumerFactory<>(consumerConfigs());
                     consumerFactoryMap.put(kafkaBroker, consumerFactory);
                 }
                 DefaultKafkaConsumerFactory<String, String> consumerFactory = consumerFactoryMap.get(kafkaBroker);
@@ -167,8 +163,8 @@ public class KafkaAutoDBConfig implements ApplicationContextAware {
                 endpoint.setConcurrency(kafkaConsumerProperties.getConcurrency());
                 endpoint.setBatchListener(true);
                 registry.registerListenerContainer(endpoint, factory, false);
+                registry.start();
             }
-            registry.start();
             log.info("自定义反射方式启动完成");
         } else {
             log.info("自定义反射配置方式失败，请检查应用配置！");
@@ -176,6 +172,7 @@ public class KafkaAutoDBConfig implements ApplicationContextAware {
     }
 
     private ApplicationContext applicationContext;
+
     @Override
     public void setApplicationContext(ApplicationContext applicationContext) throws BeansException {
         this.applicationContext = applicationContext;
@@ -184,10 +181,10 @@ public class KafkaAutoDBConfig implements ApplicationContextAware {
 
 
     public boolean initClientId() {
-        KafkaQueryConfigService kafkaQueryConfigService= applicationContext.getBean(KafkaQueryConfigService.class);
-        Map<String,Map<String,String>> resultMap=kafkaQueryConfigService.getClientIdByTopics(kafkaConsumerProperties.getTopicsListen());
+        KafkaQueryConfigService kafkaQueryConfigService = applicationContext.getBean(KafkaQueryConfigService.class);
+        Map<String, Map<String, String>> resultMap = kafkaQueryConfigService.getClientIdByTopics(kafkaConsumerProperties.getTopicsListen());
         if (MapUtil.isNotEmpty(resultMap)) {
-            Map<String,Map<String,String>> finalResultMap = resultMap;
+            Map<String, Map<String, String>> finalResultMap = resultMap;
             List<Long> clientIds = new ArrayList<>();
             List<String> validTopic = new ArrayList<>();
             List<String> invalidTopic = new ArrayList<>();
@@ -196,19 +193,19 @@ public class KafkaAutoDBConfig implements ApplicationContextAware {
                     Long clientId = Long.valueOf(finalResultMap.get(e).get("id"));
                     clientIds.add(clientId);
                     validTopic.add(e);
-                }else{
+                } else {
                     invalidTopic.add(e);
                 }
             });
             kafkaConsumerProperties.setTopicsListen(validTopic);
             kafkaConsumerProperties.setConsumerClientIds(clientIds);
-            if(validTopic.size()>0){
-                log.info("AutoDB-kafka有效的 topic: {}",  validTopic);
+            if (validTopic.size() > 0) {
+                log.info("AutoDB-kafka有效的 topic: {}", validTopic);
             }
-            if(invalidTopic.size()>0){
-                log.info("AutoDB-kafka无效的 topic: {}",  invalidTopic);
+            if (invalidTopic.size() > 0) {
+                log.info("AutoDB-kafka无效的 topic: {}", invalidTopic);
             }
-            return  true;
+            return true;
         } else {
             log.info("kafkadb方式客户端id未配置！");
             return false;
@@ -263,8 +260,6 @@ public class KafkaAutoDBConfig implements ApplicationContextAware {
             throw new RuntimeException(e);
         }
     }
-
-
 
 
 }
