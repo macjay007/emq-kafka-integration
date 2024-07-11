@@ -3,6 +3,7 @@ package com.mac.kafka.config;
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.map.MapUtil;
 import cn.hutool.core.util.ObjUtil;
+import cn.hutool.core.util.StrUtil;
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONObject;
 import com.mac.kafka.ClassMethodArgs;
@@ -118,59 +119,6 @@ public class KafkaAutoDBConfig implements ApplicationContextAware {
         //factory.setBatchListener(true);
         return factory;
     }
-
-    /**
-     * 此方式主要为db应用做组件支撑的
-     */
-    @SneakyThrows
-    public void init() {
-        if (!kafkaConsumerProperties.getDbEnabled()) {
-            return;
-        } else if (CollUtil.isEmpty(kafkaConsumerProperties.getConsumerClientIds())) {
-            if (!initClientId()) {
-                log.info("kafka-db方式客户端id初始化失败，请检查数据库topic缺失！");
-                return;
-            }
-            log.info("kafka-db方式客户端id初始化成功！");
-        }
-        List<String> topicsListen = kafkaConsumerProperties.getTopicsListen();
-        MessageHandlerMethodFactory methodFactory = postProcessor.getMessageHandlerMethodFactory();
-        if (kafkaConsumerProperties.getDbEnabled() && topicsListen.size() == kafkaConsumerProperties.getBeanMethod().size()) {
-            for (int i = 0; i < topicsListen.size(); i++) {
-                String kafkaBroker = kafkaConsumerProperties.getBootstrapServers();
-                if (!consumerFactoryMap.containsKey(kafkaBroker)) {
-//                    JSONObject props = ObjUtil.isEmpty(kafkaConsumerProperties) ? new JSONObject() : JSON.parseObject(JSON.toJSONString(kafkaConsumerProperties));
-                    DefaultKafkaConsumerFactory<String, String> consumerFactory = new DefaultKafkaConsumerFactory<>(consumerConfigs());
-                    consumerFactoryMap.put(kafkaBroker, consumerFactory);
-                }
-                DefaultKafkaConsumerFactory<String, String> consumerFactory = consumerFactoryMap.get(kafkaBroker);
-                ConcurrentKafkaListenerContainerFactory<String, String> factory = new ConcurrentKafkaListenerContainerFactory<>();
-                factory.setConsumerFactory(consumerFactory);
-                factory.setConcurrency(kafkaConsumerProperties.getConcurrency());
-                MethodKafkaListenerEndpoint<String, String> endpoint = new MethodKafkaListenerEndpoint<>();
-                ClassMethodArgs classMethodArgs = ClassMethodArgs.parseMethod(kafkaConsumerProperties.getBeanMethod().get(i));
-                Class<?> clazz = Class.forName(classMethodArgs.getClassName());
-                // 获取构造函数
-                Constructor<?> constructor = clazz.getDeclaredConstructor(long.class);
-                Method method = ReflectionUtils.findMethod(clazz, classMethodArgs.getMethod(), classMethodArgs.getArgsClasses());
-                endpoint.setBean(constructor.newInstance(kafkaConsumerProperties.getConsumerClientIds().get(i)));
-                endpoint.setMethod(method);
-                endpoint.setMessageHandlerMethodFactory(methodFactory);
-                endpoint.setId("ConsumerZoningProcessing-" + kafkaConsumerProperties.getConsumerClientIds().get(i));
-                endpoint.setGroupId(kafkaConsumerProperties.getGroupId());
-                endpoint.setTopicPartitions();
-                endpoint.setTopics(topicsListen.get(i));//Arrays.asList(kafkaConsumerProperties.getTopicsListen()).toArray(new String[0])
-                endpoint.setConcurrency(kafkaConsumerProperties.getConcurrency());
-                endpoint.setBatchListener(true);
-                registry.registerListenerContainer(endpoint, factory, false);
-                registry.start();
-            }
-            log.info("自定义反射方式启动完成");
-        } else {
-            log.info("自定义反射配置方式失败，请检查应用配置！");
-        }
-    }
-
     private ApplicationContext applicationContext;
 
     @Override
@@ -179,87 +127,57 @@ public class KafkaAutoDBConfig implements ApplicationContextAware {
         init();
     }
 
-
-    public boolean initClientId() {
-        KafkaQueryConfigService kafkaQueryConfigService = applicationContext.getBean(KafkaQueryConfigService.class);
-        Map<String, Map<String, String>> resultMap = kafkaQueryConfigService.getClientIdByTopics(kafkaConsumerProperties.getTopicsListen());
-        if (MapUtil.isNotEmpty(resultMap)) {
-            Map<String, Map<String, String>> finalResultMap = resultMap;
-            List<Long> clientIds = new ArrayList<>();
-            List<String> validTopic = new ArrayList<>();
-            List<String> invalidTopic = new ArrayList<>();
-            kafkaConsumerProperties.getTopicsListen().forEach(e -> {
-                if (finalResultMap.containsKey(e) && finalResultMap.get(e).containsKey("id")) {
-                    Long clientId = Long.valueOf(finalResultMap.get(e).get("id"));
-                    clientIds.add(clientId);
-                    validTopic.add(e);
-                } else {
-                    invalidTopic.add(e);
-                }
-            });
-            kafkaConsumerProperties.setTopicsListen(validTopic);
-            kafkaConsumerProperties.setConsumerClientIds(clientIds);
-            if (validTopic.size() > 0) {
-                log.info("AutoDB-kafka有效的 topic: {}", validTopic);
-            }
-            if (invalidTopic.size() > 0) {
-                log.info("AutoDB-kafka无效的 topic: {}", invalidTopic);
-            }
-            return true;
-        } else {
-            log.info("kafkadb方式客户端id未配置！");
-            return false;
-        }
-    }
-
-
     /**
-     * 使用反射调用指定全路径类中的方法，该方法接受一个列表作为参数并返回一个Map<String, String>
-     *
-     * @param className       全路径类名
-     * @param methodName      方法名
-     * @param listElementType 列表元素的类型
-     * @param listParams      方法的参数列表
-     * @return 方法的返回值，类型为Map<String, String>
-     * @return java.util.Map<java.lang.String, java.lang.String>
-     * @throws Exception 反射调用时可能抛出的异常
-     * @author zj
-     * @Date 15:49 2024/7/10
-     **/
-    public static Map<String, String> invokeMethodWithListParam(String className, String methodName, Class<?> listElementType, List<?> listParams) throws Exception {
-        Class<?> clazz = Class.forName(className);
-        Method method = clazz.getMethod(methodName, List.class);
-        Object instance = clazz.getDeclaredConstructor().newInstance();
-        Object result = method.invoke(instance, listParams);
-        if (result instanceof Map) {
-            @SuppressWarnings("unchecked") // 这里需要进行类型检查，但因为我们知道期望的类型，所以使用unchecked警告
-            Map<String, String> mapResult = (Map<String, String>) result;
-            return mapResult;
-        } else {
-            throw new ClassCastException("Method did not return a Map<String, String> as expected.");
+     * 此方式主要为db应用做组件支撑的
+     */
+    @SneakyThrows
+    public void init() {
+        if (!kafkaConsumerProperties.getDbEnabled()) {
+            return;
         }
-    }
-
-    public boolean initClientId2() {
-        String className = "com.mac.kafka.service.impl.KafkaConsumerConfigServiceImpl";
-        String methodName = "getClientIdByTopics";
-        Map<String, String> resultMap = null;
-        try {
-            resultMap = invokeMethodWithListParam(className, methodName, String.class, kafkaConsumerProperties.getTopicsListen());
-            if (MapUtil.isNotEmpty(resultMap)) {
-                Map<String, String> finalResultMap = resultMap;
-                kafkaConsumerProperties.getTopicsListen().forEach(e -> {
-                    kafkaConsumerProperties.getConsumerClientIds().add(Long.valueOf(finalResultMap.get(e)));
-                });
-                return true;
-            } else {
-                log.info("kafkadb方式客户端id未配置！");
-                return false;
+        KafkaQueryConfigService kafkaQueryConfigService = applicationContext.getBean(KafkaQueryConfigService.class);
+        List<Map<String, Object>> kafkaConsumerConfigs = kafkaQueryConfigService.findConfigs();
+        if(kafkaConsumerConfigs.size()==0){
+            log.info("AutoDB-kafka数据未做配置");
+            return;
+        }
+        MessageHandlerMethodFactory methodFactory = postProcessor.getMessageHandlerMethodFactory();
+        for (Map<String, Object> map : kafkaConsumerConfigs) {
+            String kafkaBroker = map.get("kafka_broker").toString();
+            if (!consumerFactoryMap.containsKey(kafkaBroker)) {
+                JSONObject props = StrUtil.isEmpty(String.valueOf(map.get("kafka_config"))) ? new JSONObject() : JSON.parseObject(String.valueOf(map.get("kafka_config")));
+                props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaBroker);
+                props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+                props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+                props.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, 10);
+                DefaultKafkaConsumerFactory<String, String> consumerFactory = new DefaultKafkaConsumerFactory<>(props);
+                consumerFactoryMap.put(kafkaBroker, consumerFactory);
             }
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
-    }
+            DefaultKafkaConsumerFactory<String, String> consumerFactory = consumerFactoryMap.get(kafkaBroker);
+            ConcurrentKafkaListenerContainerFactory<String, String> factory = new ConcurrentKafkaListenerContainerFactory<>();
+            factory.setConsumerFactory(consumerFactory);
+            factory.setConcurrency(Integer.valueOf(String.valueOf(map.get("concurrency"))));
 
+            MethodKafkaListenerEndpoint<String, String> endpoint = new MethodKafkaListenerEndpoint<>();
+            ClassMethodArgs classMethodArgs = ClassMethodArgs.parseMethod(String.valueOf(map.get("bean_method")));
+            Class<?> clazz = (Class<?>) Class.forName(classMethodArgs.getClassName());
+            // 获取构造函数
+            Constructor<?> constructor = clazz.getDeclaredConstructor(long.class);
+            endpoint.setBean(constructor.newInstance(Long.valueOf(String.valueOf(map.get("id")))));
+            Method method = ReflectionUtils.findMethod(clazz, classMethodArgs.getMethod(), classMethodArgs.getArgsClasses());
+            endpoint.setMethod(method);
+            endpoint.setMessageHandlerMethodFactory(methodFactory);
+            endpoint.setId("ConsumerZoningProcessing-" + map.get("id"));
+            endpoint.setGroupId(String.valueOf(map.get("kafka_group_id")));
+            endpoint.setTopicPartitions();
+            endpoint.setTopics(String.valueOf(map.get("kafka_topic")));
+            endpoint.setConcurrency(Integer.valueOf(String.valueOf(map.get("concurrency"))));
+            endpoint.setBatchListener(true);
+            registry.registerListenerContainer(endpoint, factory, false);
+        }
+        registry.start();
+        log.info("自定义反射方式启动完成");
+
+    }
 
 }
