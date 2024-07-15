@@ -1,0 +1,152 @@
+package com.mac.websocket.pojo;
+
+
+import io.netty.buffer.ByteBuf;
+import io.netty.buffer.ByteBufAllocator;
+import io.netty.channel.*;
+import io.netty.handler.codec.http.websocketx.BinaryWebSocketFrame;
+import io.netty.handler.codec.http.websocketx.TextWebSocketFrame;
+import io.netty.util.AttributeKey;
+
+import java.net.SocketAddress;
+import java.nio.ByteBuffer;
+
+public class Session {
+    private final Channel channel;
+
+    Session(Channel channel) {
+        this.channel = channel;
+    }
+
+    public void setSubprotocols(String subprotocols) {
+        this.setAttribute("subprotocols", subprotocols);
+    }
+
+    public ChannelFuture sendText(String message) {
+        return this.channel.writeAndFlush(new TextWebSocketFrame(message));
+    }
+
+    public ChannelFuture sendText(ByteBuf byteBuf) {
+        return this.channel.writeAndFlush(new TextWebSocketFrame(byteBuf));
+    }
+
+    public ChannelFuture sendText(ByteBuffer byteBuffer) {
+        ByteBuf buffer = this.channel.alloc().buffer(byteBuffer.remaining());
+        buffer.writeBytes(byteBuffer);
+        return this.channel.writeAndFlush(new TextWebSocketFrame(buffer));
+    }
+
+    public ChannelFuture sendText(TextWebSocketFrame textWebSocketFrame) {
+        return this.channel.writeAndFlush(textWebSocketFrame);
+    }
+
+    public ChannelFuture sendBinary(byte[] bytes) {
+        ByteBuf buffer = this.channel.alloc().buffer(bytes.length);
+        return this.channel.writeAndFlush(new BinaryWebSocketFrame(buffer.writeBytes(bytes)));
+    }
+
+    public ChannelFuture sendBinary(ByteBuf byteBuf) {
+        return this.channel.writeAndFlush(new BinaryWebSocketFrame(byteBuf));
+    }
+
+    public ChannelFuture sendBinary(ByteBuffer byteBuffer) {
+        ByteBuf buffer = this.channel.alloc().buffer(byteBuffer.remaining());
+        buffer.writeBytes(byteBuffer);
+        return this.channel.writeAndFlush(new BinaryWebSocketFrame(buffer));
+    }
+
+    public ChannelFuture sendBinary(BinaryWebSocketFrame binaryWebSocketFrame) {
+        return this.channel.writeAndFlush(binaryWebSocketFrame);
+    }
+
+    public <T> void setAttribute(String name, T value) {
+        AttributeKey<T> sessionIdKey = AttributeKey.valueOf(name);
+        this.channel.attr(sessionIdKey).set(value);
+    }
+
+    public <T> T getAttribute(String name) {
+        AttributeKey<T> sessionIdKey = AttributeKey.valueOf(name);
+        return this.channel.attr(sessionIdKey).get();
+    }
+
+    public Channel channel() {
+        return this.channel;
+    }
+
+    public ChannelId id() {
+        return this.channel.id();
+    }
+
+    public ChannelConfig config() {
+        return this.channel.config();
+    }
+
+    public boolean isOpen() {
+        return this.channel.isOpen();
+    }
+
+    public boolean isRegistered() {
+        return this.channel.isRegistered();
+    }
+
+    public boolean isActive() {
+        return this.channel.isActive();
+    }
+
+    public ChannelMetadata metadata() {
+        return this.channel.metadata();
+    }
+
+    public SocketAddress localAddress() {
+        return this.channel.localAddress();
+    }
+
+    public SocketAddress remoteAddress() {
+        return this.channel.remoteAddress();
+    }
+
+    public ChannelFuture closeFuture() {
+        return this.channel.closeFuture();
+    }
+
+    public boolean isWritable() {
+        return this.channel.isWritable();
+    }
+
+    public long bytesBeforeUnwritable() {
+        return this.channel.bytesBeforeUnwritable();
+    }
+
+    public long bytesBeforeWritable() {
+        return this.channel.bytesBeforeWritable();
+    }
+
+    public Channel.Unsafe unsafe() {
+        return this.channel.unsafe();
+    }
+
+    public ChannelPipeline pipeline() {
+        return this.channel.pipeline();
+    }
+
+    public ByteBufAllocator alloc() {
+        return this.channel.alloc();
+    }
+
+    public Channel read() {
+        return this.channel.read();
+    }
+
+    public Channel flush() {
+        return this.channel.flush();
+    }
+
+    public ChannelFuture close() {
+        return this.channel.close();
+    }
+
+    public ChannelFuture close(ChannelPromise promise) {
+        return this.channel.close(promise);
+    }
+}
+
