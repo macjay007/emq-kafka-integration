@@ -13,7 +13,7 @@
 - ###### exhook组件 
             grpc方式的emq钩子组件可为高级应用钩子方式传递数据到外部系统（也支持webhook 这个可以看下emq官网相对比较简单 我也觉得比较不错 rest方式就能解决）
 - ###### kafka组件
-            自定义db+LB生成、消费端高级应用；自定义消费端高级应用监听；官方编程式生产消费支持
+            自定义db+LB生产、消费端高级应用；自定义消费端高级应用监听；官方编程式生产消费支持
 - ###### websocket组件  
             springwebsocket+netty方式 websocket 高级应用支持；    
 
@@ -28,6 +28,7 @@
 
 #### 开源中间件使用 
 ---
+
 ![image](https://github.com/user-attachments/assets/dd5331c3-e232-4a5d-8fc3-d0e7d2e91652)
 
 ---
