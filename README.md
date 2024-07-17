@@ -36,7 +36,7 @@
    - 在您的高级应用项目中，添加对 `emq-kafka-integration` 项目的依赖。
 
 3. **配置端配置**
-   - 根据您的业务需求，配置 EMQ、Kafka、Websocket 等组件的相关参数。
+   - 根据您的业务需求，配置 EMQ、Kafka、Websocket 等组件的相关参数。（（注意：请看下我另一个项目的yaml文件即可））
 
 ## 开源中间件使用
 
