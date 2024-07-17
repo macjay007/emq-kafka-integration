@@ -142,6 +142,7 @@ public class KafkaAutoDBConfig implements ApplicationContextAware {
             return;
         }
         MessageHandlerMethodFactory methodFactory = postProcessor.getMessageHandlerMethodFactory();
+        List<String> list = CollUtil.newArrayList();
         for (Map<String, Object> map : kafkaConsumerConfigs) {
             String kafkaBroker = map.get("kafka_broker").toString();
             if (!consumerFactoryMap.containsKey(kafkaBroker)) {
@@ -173,10 +174,11 @@ public class KafkaAutoDBConfig implements ApplicationContextAware {
             endpoint.setTopics(String.valueOf(map.get("kafka_topic")));
             endpoint.setConcurrency(Integer.valueOf(String.valueOf(map.get("concurrency"))));
             endpoint.setBatchListener(true);
+            list.addAll(endpoint.getTopics());
             registry.registerListenerContainer(endpoint, factory, false);
         }
         registry.start();
-        log.info("自定义反射方式启动完成");
+         log.info("AutoDB-kafka启动完成,已订阅kafka-topic:{}",list);
 
     }
 
