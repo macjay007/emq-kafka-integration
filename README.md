@@ -1,4 +1,4 @@
-### 此项目是一个基于spring的桥接emq和kafka 高级应用支撑组件
+### 此项目是一个基于spring的桥接emq和kafka 高级应用支撑组件（如果觉的有意义给个star）
 ---
 ###### 闲来无事写了一个支撑组件，欢迎互相学习！
 ###### 桥接消息组件涉及（emq、kafka、websocket等）可支撑高级应用组件；
@@ -27,8 +27,15 @@
 1. maven 上传私有库 
 1. 高级应用引入 
 1. 配置端配置 
- 
+
+#### 开源中间件使用 
+---
+![image](https://github.com/user-attachments/assets/dd5331c3-e232-4a5d-8fc3-d0e7d2e91652)
+
 ---
 
+![image](https://github.com/user-attachments/assets/eff6beec-5ae7-4917-9c75-9a62631d23f3)
 
- ##  ==**还有很对细节后续有空在多弄下**== 
+---
+ 
+#### 高级应用运维使用有空在写 略
