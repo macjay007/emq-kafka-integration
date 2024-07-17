@@ -1,9 +1,9 @@
 package com.mac.kafka.config;
 
 import cn.hutool.core.map.MapUtil;
-import com.mac.kafka.annotation.KafkaAnnotationConsumer;
 import com.mac.kafka.KafkaConsumerProperties;
 import com.mac.kafka.KafkaMessageHandler;
+import com.mac.kafka.annotation.KafkaAnnotationConsumer;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.consumer.*;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -14,12 +14,15 @@ import org.springframework.context.ApplicationContextAware;
 import org.springframework.core.Ordered;
 import org.springframework.stereotype.Component;
 
-import javax.annotation.Resource;
 import java.time.Duration;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.Properties;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 /**
  * 自定义注册topic
@@ -46,27 +49,54 @@ public class KafkaCustomConfig implements ApplicationContextAware, Ordered {
     }
 
 
-    public   void startConsumer() {
-        // 设置Kafka消费者配置
+    public void startConsumer() {
         Properties props = new Properties();
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaConsumerProperties.getBootstrapServers());
         props.put(ConsumerConfig.GROUP_ID_CONFIG, kafkaConsumerProperties.getGroupId());
         props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
         props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
-        try (Consumer<String, String> consumer = new KafkaConsumer<>(props)) {
-            consumer.subscribe(topicHandlers.keySet());
+        Consumer<String, String> consumer = new KafkaConsumer<>(props);
+        consumer.subscribe(topicHandlers.keySet());
+        log.info("自定义消费端订阅完成");
+
+        try {
             while (!Thread.currentThread().isInterrupted()) {
                 ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(100));
                 for (ConsumerRecord<String, String> record : records) {
                     executorService.submit(() -> {
-                        handleRecord(record);
+                        try {
+                            handleRecord(record);
+                        } catch (Exception e) {
+                            log.error("Error while handling record", e);
+                        }
                     });
                 }
             }
         } catch (Exception e) {
             log.error("Error while consuming Kafka messages", e);
         } finally {
-            executorService.shutdown();
+            // 先关闭KafkaConsumer
+            consumer.close();
+            // 然后开始优雅地关闭ExecutorService
+            executorService.shutdown(); // 禁用新任务的提交，并启动已提交任务的关闭序列
+            try {
+                // 等待所有任务完成（设置超时）
+                if (!executorService.awaitTermination(60, TimeUnit.SECONDS)) {
+                    // 如果超时，则尝试停止所有正在执行的任务
+                    executorService.shutdownNow();
+                    // 可能还需要等待一小段时间以确保任务确实停止了
+                    if (!executorService.awaitTermination(10, TimeUnit.SECONDS)) {
+                        log.error("ExecutorService did not terminate");
+                    }
+                }
+            } catch (InterruptedException ie) {
+                // 如果当前线程在等待过程中被中断，则也取消等待的任务
+                executorService.shutdownNow();
+                // 保存中断状态
+                Thread.currentThread().interrupt();
+            }
+            // 输出优雅关闭的信息
+            log.info("Kafka consumer and executor service shut down gracefully.");
         }
     }
 
@@ -90,7 +120,7 @@ public class KafkaCustomConfig implements ApplicationContextAware, Ordered {
     public void setApplicationContext(ApplicationContext applicationContext) throws BeansException {
         this.applicationContext = applicationContext;
         try {
-            if(kafkaConsumerProperties.getCustomEnabled()) {
+            if (kafkaConsumerProperties.getCustomEnabled()) {
                 integrationRigisterRun();
             }
         } catch (Exception e) {
@@ -105,7 +135,7 @@ public class KafkaCustomConfig implements ApplicationContextAware, Ordered {
 
     public boolean integrationRigisterRun() throws Exception {
         Map<String, KafkaMessageHandler> strategies = applicationContext.getBeansOfType(KafkaMessageHandler.class);
-        List<String> topics=new ArrayList<>();
+        List<String> topics = new ArrayList<>();
         for (Map.Entry<String, KafkaMessageHandler> entry : strategies.entrySet()) {
             KafkaMessageHandler strategy = entry.getValue();
             if (strategy.getClass().isAnnotationPresent(KafkaAnnotationConsumer.class)) {
@@ -116,10 +146,10 @@ public class KafkaCustomConfig implements ApplicationContextAware, Ordered {
                 topics.add(strategy.getTopic());
             }
         }
-        log.info("自定义注册的 topic: {}",  topics);
-        if(topicHandlers.size()!=strategies.size()){
+        log.info("自定义注册的 topic: {}", topics);
+        if (topicHandlers.size() != strategies.size()) {
             throw new Exception("请检查topics，topics重复验证失败");
-        }else{
+        } else {
             startConsumer();
             log.info("自定义kafka客户端启动成功！");
         }
