@@ -5,6 +5,9 @@ package com.mac.log.entity;
 * @author zj
 * @Date 2024/7/23 10:38
 **/
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
 public class UserToken {
     /**
      * 用户ID db_column: user_id
