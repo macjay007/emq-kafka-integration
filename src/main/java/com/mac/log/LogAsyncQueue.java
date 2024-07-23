@@ -9,10 +9,11 @@ import javax.annotation.PreDestroy;
 import java.util.concurrent.*;
 
 /**
- * @author: Administrator
+ * @author: mac
  * @date: 2024/7/23
  */
-public class LogAsyncQueue {private static final Logger log = LoggerFactory.getLogger(LogAsyncQueue.class);
+public class LogAsyncQueue {
+    private static final Logger log = LoggerFactory.getLogger(LogAsyncQueue.class);
     private static final int QUEUE_MAX_SIZE = 1000;
     private static final int CORE_POOL_SIZE = 1;
     private static final long KEEP_ACTIVE_TIME = 200L;
